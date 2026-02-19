@@ -77,7 +77,6 @@ class OrchestratorConfig:
     reviewer_terminal_id: str
     run_root: Path
     cao_base_url: str
-    max_review_rounds_per_phase: int = 8
     poll_interval_sec: float = 2.0
     response_timeout_sec: int = 1800
     commit_max_retries: int = 1
@@ -101,7 +100,6 @@ class OrchestratorConfig:
             reviewer_terminal_id=str(data["reviewer_terminal_id"]),
             run_root=Path(data["run_root"]),
             cao_base_url=str(data["cao_base_url"]),
-            max_review_rounds_per_phase=int(data.get("max_review_rounds_per_phase", 8)),
             poll_interval_sec=float(data.get("poll_interval_sec", 2.0)),
             response_timeout_sec=int(data.get("response_timeout_sec", 1800)),
             commit_max_retries=int(data.get("commit_max_retries", 1)),

@@ -178,9 +178,8 @@ class OrchestratorRunner:
         design_doc = self.config.design_doc_path.read_text()
         plan_doc = self.config.plan_doc_path.read_text()
 
-        start_round = max(1, self.state.round)
-
-        for round_idx in range(start_round, self.config.max_review_rounds_per_phase + 1):
+        round_idx = max(1, self.state.round)
+        while True:
             self.state.round = round_idx
             self.state.touch("phase_implementing")
             self._save_state()
@@ -243,6 +242,7 @@ class OrchestratorRunner:
                 self.state.previous_must_fix = analysis.must_fix or [analysis.summary]
                 self.state.touch("review_failed")
                 self._save_state()
+                round_idx += 1
                 continue
 
             commit_result = self._commit_phase(phase_dir)
@@ -258,11 +258,6 @@ class OrchestratorRunner:
             self.state.touch("phase_passed")
             self._save_state()
             return self.run_dir
-
-        self.state.phase_status = PhaseStatus.FAILED
-        self.state.touch("max_rounds_reached")
-        self._save_state()
-        return self.run_dir
 
     def _preflight_checks(self) -> None:
         if not self.config.design_doc_path.exists():

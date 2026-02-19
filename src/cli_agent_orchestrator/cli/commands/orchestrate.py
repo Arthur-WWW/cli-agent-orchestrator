@@ -52,7 +52,6 @@ def _get_terminal_session_name(client: CaoHttpClient, terminal_id: str) -> str:
     type=click.Path(path_type=Path),
 )
 @click.option("--cao-base-url", default=API_BASE_URL, show_default=True, type=str)
-@click.option("--max-review-rounds", default=8, show_default=True, type=int)
 @click.option("--poll-interval", default=2.0, show_default=True, type=float)
 @click.option("--response-timeout", default=1800, show_default=True, type=int)
 @click.option("--commit-max-retries", default=1, show_default=True, type=int)
@@ -92,7 +91,6 @@ def run_orchestrator(
     reviewer_profile: str,
     run_root: Path,
     cao_base_url: str,
-    max_review_rounds: int,
     poll_interval: float,
     response_timeout: int,
     commit_max_retries: int,
@@ -240,7 +238,6 @@ def run_orchestrator(
         reviewer_terminal_id=resolved_reviewer_terminal,
         run_root=run_root,
         cao_base_url=cao_base_url,
-        max_review_rounds_per_phase=max_review_rounds,
         poll_interval_sec=poll_interval,
         response_timeout_sec=response_timeout,
         commit_max_retries=commit_max_retries,

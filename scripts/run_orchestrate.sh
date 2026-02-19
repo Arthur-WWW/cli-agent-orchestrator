@@ -24,7 +24,6 @@ Environment overrides (optional):
   LAUNCH_REVIEWER_AGENT (default: 0; set to 1 to auto-launch)
   REVIEWER_PROVIDER (default: codex)
   REVIEWER_PROFILE (default: reviewer)
-  MAX_REVIEW_ROUNDS (default: 8)
   POLL_INTERVAL (default: 2)
   RESPONSE_TIMEOUT (default: 1800)
   COMMIT_MAX_RETRIES (default: 1)
@@ -69,7 +68,6 @@ DEVELOPER_PROFILE="${DEVELOPER_PROFILE:-developer}"
 LAUNCH_REVIEWER_AGENT="${LAUNCH_REVIEWER_AGENT:-0}"
 REVIEWER_PROVIDER="${REVIEWER_PROVIDER:-codex}"
 REVIEWER_PROFILE="${REVIEWER_PROFILE:-reviewer}"
-MAX_REVIEW_ROUNDS="${MAX_REVIEW_ROUNDS:-8}"
 POLL_INTERVAL="${POLL_INTERVAL:-2}"
 RESPONSE_TIMEOUT="${RESPONSE_TIMEOUT:-1800}"
 COMMIT_MAX_RETRIES="${COMMIT_MAX_RETRIES:-1}"
@@ -86,7 +84,6 @@ CMD=(
   --phase-name "$PHASE"
   --run-root "$RUN_ROOT"
   --cao-base-url "$CAO_BASE_URL"
-  --max-review-rounds "$MAX_REVIEW_ROUNDS"
   --poll-interval "$POLL_INTERVAL"
   --response-timeout "$RESPONSE_TIMEOUT"
   --commit-max-retries "$COMMIT_MAX_RETRIES"
