@@ -55,12 +55,6 @@ def _get_terminal_session_name(client: CaoHttpClient, terminal_id: str) -> str:
 @click.option("--max-review-rounds", default=8, show_default=True, type=int)
 @click.option("--poll-interval", default=2.0, show_default=True, type=float)
 @click.option("--response-timeout", default=1800, show_default=True, type=int)
-@click.option(
-    "--commit-message-template",
-    default="phase({phase}): implement approved changes",
-    show_default=True,
-    type=str,
-)
 @click.option("--commit-max-retries", default=1, show_default=True, type=int)
 @click.option(
     "--intent-provider",
@@ -101,7 +95,6 @@ def run_orchestrator(
     max_review_rounds: int,
     poll_interval: float,
     response_timeout: int,
-    commit_message_template: str,
     commit_max_retries: int,
     intent_provider: str,
     intent_terminal: Optional[str],
@@ -250,7 +243,6 @@ def run_orchestrator(
         max_review_rounds_per_phase=max_review_rounds,
         poll_interval_sec=poll_interval,
         response_timeout_sec=response_timeout,
-        commit_message_template=commit_message_template,
         commit_max_retries=commit_max_retries,
         intent_provider=intent_provider,
         intent_terminal_id=resolved_intent_terminal,

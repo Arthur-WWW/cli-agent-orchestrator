@@ -27,7 +27,6 @@ Environment overrides (optional):
   MAX_REVIEW_ROUNDS (default: 8)
   POLL_INTERVAL (default: 2)
   RESPONSE_TIMEOUT (default: 1800)
-  COMMIT_MESSAGE_TEMPLATE (default: phase({phase}): implement approved changes)
   COMMIT_MAX_RETRIES (default: 1)
   INTENT_PROVIDER (default: reviewer; options: none|developer|reviewer|analyzer)
   INTENT_TERMINAL (default: empty)
@@ -73,7 +72,6 @@ REVIEWER_PROFILE="${REVIEWER_PROFILE:-reviewer}"
 MAX_REVIEW_ROUNDS="${MAX_REVIEW_ROUNDS:-8}"
 POLL_INTERVAL="${POLL_INTERVAL:-2}"
 RESPONSE_TIMEOUT="${RESPONSE_TIMEOUT:-1800}"
-COMMIT_MESSAGE_TEMPLATE="${COMMIT_MESSAGE_TEMPLATE:-phase({phase}): implement approved changes}"
 COMMIT_MAX_RETRIES="${COMMIT_MAX_RETRIES:-1}"
 INTENT_PROVIDER="${INTENT_PROVIDER:-reviewer}"
 INTENT_TERMINAL="${INTENT_TERMINAL:-}"
@@ -91,7 +89,6 @@ CMD=(
   --max-review-rounds "$MAX_REVIEW_ROUNDS"
   --poll-interval "$POLL_INTERVAL"
   --response-timeout "$RESPONSE_TIMEOUT"
-  --commit-message-template "$COMMIT_MESSAGE_TEMPLATE"
   --commit-max-retries "$COMMIT_MAX_RETRIES"
   --intent-provider "$INTENT_PROVIDER"
 )

@@ -35,6 +35,7 @@ from cli_agent_orchestrator.orchestrator.prompts import (
 )
 
 logger = logging.getLogger(__name__)
+FIXED_COMMIT_MESSAGE_TEMPLATE = "phase({phase}): implement approved changes"
 
 
 class PhaseBlockedError(RuntimeError):
@@ -318,7 +319,7 @@ class OrchestratorRunner:
 
     def _commit_phase(self, phase_dir: Path) -> CommitResult:
         commit_dir = phase_dir / "commit"
-        commit_message = self.config.commit_message_template.format(phase=self.state.current_phase)
+        commit_message = FIXED_COMMIT_MESSAGE_TEMPLATE.format(phase=self.state.current_phase)
 
         attempt = 0
         while attempt <= self.config.commit_max_retries:

@@ -80,7 +80,6 @@ class OrchestratorConfig:
     max_review_rounds_per_phase: int = 8
     poll_interval_sec: float = 2.0
     response_timeout_sec: int = 1800
-    commit_message_template: str = "phase({phase}): implement approved changes"
     commit_max_retries: int = 1
     intent_provider: str = "reviewer"
     intent_terminal_id: Optional[str] = None
@@ -105,12 +104,6 @@ class OrchestratorConfig:
             max_review_rounds_per_phase=int(data.get("max_review_rounds_per_phase", 8)),
             poll_interval_sec=float(data.get("poll_interval_sec", 2.0)),
             response_timeout_sec=int(data.get("response_timeout_sec", 1800)),
-            commit_message_template=str(
-                data.get(
-                    "commit_message_template",
-                    "phase({phase}): implement approved changes",
-                )
-            ),
             commit_max_retries=int(data.get("commit_max_retries", 1)),
             intent_provider=str(data.get("intent_provider", "reviewer")),
             intent_terminal_id=(
