@@ -46,6 +46,16 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 uv tool install git+https://github.com/awslabs/cli-agent-orchestrator.git@main --upgrade
 ```
 
+Install from a fork/branch/tag (useful for testing custom changes):
+
+```bash
+# Branch
+uv tool install "git+https://github.com/<your-user>/cli-agent-orchestrator.git@<branch>" --upgrade
+
+# Tag
+uv tool install "git+https://github.com/<your-user>/cli-agent-orchestrator.git@v1.0.1" --upgrade
+```
+
 ## Quick Start
 
 ### Installing Agents
@@ -255,6 +265,38 @@ Example: Multi-role feature development
 The `cao-server` runs on `http://localhost:9889` by default and exposes REST APIs for session management, terminal control, and messaging. The CLI commands (`cao launch`, `cao shutdown`) and MCP server tools (`handoff`, `assign`, `send_message`) are just examples of how these APIs can be packaged together.
 
 You can combine the three orchestration modes above into custom workflows, or create entirely new orchestration patterns using the underlying APIs to fit your specific needs.
+
+Phase-driven orchestration is also available via `cao orchestrate`:
+
+```bash
+# Start CAO server first
+cao-server
+
+# Auto-launch developer and reviewer with explicit providers
+cao orchestrate run \
+  --design /abs/path/design.md \
+  --plan /abs/path/plan.md \
+  --phase-name phase-1 \
+  --launch-developer-agent \
+  --developer-provider codex \
+  --developer-profile developer \
+  --launch-reviewer-agent \
+  --reviewer-provider claude_code \
+  --reviewer-profile reviewer
+```
+
+Alternative mode: pass existing terminal IDs instead of launching new ones:
+
+```bash
+cao orchestrate run \
+  --design /abs/path/design.md \
+  --plan /abs/path/plan.md \
+  --phase-name phase-1 \
+  --developer-terminal <developer_terminal_id> \
+  --reviewer-terminal <reviewer_terminal_id>
+```
+
+You can also use helper script `scripts/run_orchestrate.sh` for the same workflow.
 
 For complete API documentation, see [docs/api.md](docs/api.md).
 
