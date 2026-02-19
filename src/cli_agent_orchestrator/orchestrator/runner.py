@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import re
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from cli_agent_orchestrator.models.terminal import TerminalStatus
 from cli_agent_orchestrator.orchestrator.cao_client import (
@@ -36,6 +37,9 @@ from cli_agent_orchestrator.orchestrator.prompts import (
 
 logger = logging.getLogger(__name__)
 FIXED_COMMIT_MESSAGE_TEMPLATE = "phase({phase}): implement approved changes"
+STAGNATION_SIMILARITY_THRESHOLD = 0.8
+STAGNATION_MAX_ADDED_ITEMS = 1
+STAGNATION_BLOCK_THRESHOLD = 2
 
 
 class PhaseBlockedError(RuntimeError):
@@ -107,6 +111,58 @@ def parse_commit_result(output: str) -> CommitResult:
         return CommitResult(success=False, reason="Commit output contains fatal/error")
 
     return CommitResult(success=False, reason="Unable to parse commit result")
+
+
+def _normalize_issue_text(issue: str) -> str:
+    """Normalize reviewer must-fix text for stable cross-round comparison."""
+    text = issue.lower().strip()
+    text = re.sub(r"(?<=:)\d+(?::\d+)?\b", "n", text)
+    text = re.sub(r"\b(line|ln|#l)\s*\d+\b", " ", text)
+    text = re.sub(r"[^a-z0-9\u4e00-\u9fff\s]", " ", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
+
+
+def _issue_fingerprint(issue: str) -> str:
+    normalized = _normalize_issue_text(issue)
+    if not normalized:
+        return ""
+    return hashlib.sha1(normalized.encode("utf-8")).hexdigest()[:16]
+
+
+def build_issue_fingerprints(items: List[str]) -> List[str]:
+    fingerprints: Set[str] = set()
+    for item in items:
+        if not item.strip():
+            continue
+        fingerprint = _issue_fingerprint(item)
+        if fingerprint:
+            fingerprints.add(fingerprint)
+    return sorted(fingerprints)
+
+
+def detect_stagnation(
+    previous_fingerprints: List[str],
+    current_fingerprints: List[str],
+) -> Tuple[bool, float, int, int]:
+    """Detect whether current must-fix set is effectively unchanged."""
+    previous_set = set(previous_fingerprints)
+    current_set = set(current_fingerprints)
+    if not previous_set or not current_set:
+        return False, 0.0, len(previous_set), len(current_set)
+
+    intersection = previous_set.intersection(current_set)
+    union = previous_set.union(current_set)
+    similarity = len(intersection) / len(union)
+    resolved_count = len(previous_set.difference(current_set))
+    added_count = len(current_set.difference(previous_set))
+
+    stagnant = (
+        resolved_count == 0
+        and similarity >= STAGNATION_SIMILARITY_THRESHOLD
+        and added_count <= STAGNATION_MAX_ADDED_ITEMS
+    )
+    return stagnant, similarity, resolved_count, added_count
 
 
 class OrchestratorRunner:
@@ -239,7 +295,43 @@ class OrchestratorRunner:
             _write_json(round_dir / "review_result.json", analysis.to_dict())
 
             if analysis.decision == IntentDecision.FAIL:
-                self.state.previous_must_fix = analysis.must_fix or [analysis.summary]
+                must_fix_items = analysis.must_fix or [analysis.summary]
+                current_fingerprints = build_issue_fingerprints(must_fix_items)
+                previous_fingerprints = self.state.last_must_fix_fingerprints
+
+                if previous_fingerprints:
+                    (
+                        stagnant,
+                        similarity,
+                        resolved_count,
+                        added_count,
+                    ) = detect_stagnation(previous_fingerprints, current_fingerprints)
+                    if stagnant:
+                        self.state.stagnation_count += 1
+                        self.state.stagnation_reason = (
+                            "must-fix set unchanged "
+                            f"(similarity={similarity:.2f}, resolved={resolved_count}, "
+                            f"added={added_count})"
+                        )
+                    else:
+                        self.state.stagnation_count = 0
+                        self.state.stagnation_reason = None
+                else:
+                    self.state.stagnation_count = 0
+                    self.state.stagnation_reason = None
+
+                self.state.last_must_fix_fingerprints = current_fingerprints
+                self.state.previous_must_fix = must_fix_items
+
+                if self.state.stagnation_count >= STAGNATION_BLOCK_THRESHOLD:
+                    self.state.phase_status = PhaseStatus.BLOCKED
+                    self.state.touch("review_stagnation_blocked")
+                    self._save_state()
+                    raise PhaseBlockedError(
+                        "Review loop stagnated: "
+                        + (self.state.stagnation_reason or "must-fix set unchanged")
+                    )
+
                 self.state.touch("review_failed")
                 self._save_state()
                 round_idx += 1
@@ -255,6 +347,9 @@ class OrchestratorRunner:
             self.state.last_phase_commit = commit_result.to_dict()
             self.state.phase_status = PhaseStatus.PASSED
             self.state.previous_must_fix = []
+            self.state.last_must_fix_fingerprints = []
+            self.state.stagnation_count = 0
+            self.state.stagnation_reason = None
             self.state.touch("phase_passed")
             self._save_state()
             return self.run_dir

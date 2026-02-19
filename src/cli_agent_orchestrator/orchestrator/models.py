@@ -127,6 +127,9 @@ class RunState:
     last_transition: str
     last_phase_commit: Optional[Dict[str, Any]]
     previous_must_fix: List[str] = field(default_factory=list)
+    last_must_fix_fingerprints: List[str] = field(default_factory=list)
+    stagnation_count: int = 0
+    stagnation_reason: Optional[str] = None
     config: Optional[Dict[str, Any]] = None
     updated_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
@@ -143,6 +146,9 @@ class RunState:
             "last_transition": self.last_transition,
             "last_phase_commit": self.last_phase_commit,
             "previous_must_fix": self.previous_must_fix,
+            "last_must_fix_fingerprints": self.last_must_fix_fingerprints,
+            "stagnation_count": self.stagnation_count,
+            "stagnation_reason": self.stagnation_reason,
             "config": self.config,
             "updated_at": self.updated_at,
         }
@@ -161,6 +167,13 @@ class RunState:
             last_transition=str(data["last_transition"]),
             last_phase_commit=data.get("last_phase_commit"),
             previous_must_fix=list(data.get("previous_must_fix", [])),
+            last_must_fix_fingerprints=list(data.get("last_must_fix_fingerprints", [])),
+            stagnation_count=int(data.get("stagnation_count", 0)),
+            stagnation_reason=(
+                str(data["stagnation_reason"])
+                if isinstance(data.get("stagnation_reason"), str)
+                else None
+            ),
             config=data.get("config"),
             updated_at=str(data.get("updated_at", datetime.now(timezone.utc).isoformat())),
         )
