@@ -49,11 +49,11 @@ uv tool install git+https://github.com/awslabs/cli-agent-orchestrator.git@main -
 Install from a fork/branch/tag (useful for testing custom changes):
 
 ```bash
-# Branch
-uv tool install "git+https://github.com/<your-user>/cli-agent-orchestrator.git@<branch>" --upgrade
+# Directly install this fork branch
+uv tool install "git+https://github.com/Arthur-WWW/cli-agent-orchestrator.git@codex/orchestrate-provider-launch" --upgrade
 
-# Tag
-uv tool install "git+https://github.com/<your-user>/cli-agent-orchestrator.git@v1.0.1" --upgrade
+# Install from a released tag
+uv tool install "git+https://github.com/Arthur-WWW/cli-agent-orchestrator.git@v1.0.1" --upgrade
 ```
 
 ## Quick Start
