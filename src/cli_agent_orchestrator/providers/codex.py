@@ -18,6 +18,8 @@ IDLE_PROMPT_PATTERN = r"(?:❯|›|codex>)"
 # Match the prompt only if it appears at the end of the captured output.
 # Allows trailing text on the same line (e.g., "What would you like to do next?")
 IDLE_PROMPT_AT_END_PATTERN = rf"(?:^\s*{IDLE_PROMPT_PATTERN}\s*)\s*\Z"
+# Fallback for layouts where prompt line is followed by a status/footer line.
+IDLE_PROMPT_RECENT_PATTERN = rf"^\s*{IDLE_PROMPT_PATTERN}(?:\s|$)"
 IDLE_PROMPT_PATTERN_LOG = r"❯"
 ASSISTANT_PREFIX_PATTERN = r"^(?:assistant|codex|agent)\s*:"
 USER_PREFIX_PATTERN = r"^You\b"
@@ -70,6 +72,9 @@ class CodexProvider(BaseProvider):
 
         clean_output = re.sub(ANSI_CODE_PATTERN, "", output)
         tail_output = "\n".join(clean_output.splitlines()[-25:])
+        has_processing_indicator = bool(
+            re.search(PROCESSING_PATTERN, tail_output, re.IGNORECASE | re.MULTILINE)
+        )
 
         last_user = None
         for match in re.finditer(USER_PREFIX_PATTERN, clean_output, re.IGNORECASE | re.MULTILINE):
@@ -87,6 +92,9 @@ class CodexProvider(BaseProvider):
 
         has_idle_prompt_at_end = bool(
             re.search(IDLE_PROMPT_AT_END_PATTERN, clean_output, re.IGNORECASE | re.MULTILINE)
+        )
+        has_idle_prompt_recent = bool(
+            re.search(IDLE_PROMPT_RECENT_PATTERN, tail_output, re.IGNORECASE | re.MULTILINE)
         )
 
         # Only treat ERROR/WAITING prompts as actionable if they appear after the last user message
@@ -112,7 +120,10 @@ class CodexProvider(BaseProvider):
                 return TerminalStatus.WAITING_USER_ANSWER
             if re.search(ERROR_PATTERN, tail_output, re.IGNORECASE | re.MULTILINE):
                 return TerminalStatus.ERROR
-        if has_idle_prompt_at_end:
+        if has_processing_indicator:
+            return TerminalStatus.PROCESSING
+
+        if has_idle_prompt_at_end or has_idle_prompt_recent:
             # Consider COMPLETED only if we see an assistant marker after the last user message.
             if last_user is not None:
                 if re.search(

@@ -164,6 +164,20 @@ class TestCodexProviderStatusDetection:
         assert status == TerminalStatus.PROCESSING
 
     @patch("cli_agent_orchestrator.providers.codex.tmux_client")
+    def test_get_status_idle_when_prompt_not_at_absolute_end(self, mock_tmux):
+        # Some Codex layouts print a footer/status line after the prompt.
+        mock_tmux.get_history.return_value = (
+            "Welcome to Codex\n"
+            "› \n"
+            "                                                             100% context left\n"
+        )
+
+        provider = CodexProvider("test1234", "test-session", "window-0")
+        status = provider.get_status()
+
+        assert status == TerminalStatus.IDLE
+
+    @patch("cli_agent_orchestrator.providers.codex.tmux_client")
     def test_get_status_not_error_on_failed_in_message(self, mock_tmux):
         # "failed" is commonly used in normal assistant output; it should not automatically
         # force ERROR.
