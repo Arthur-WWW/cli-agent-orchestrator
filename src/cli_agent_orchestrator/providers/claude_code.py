@@ -22,11 +22,11 @@ class ProviderError(Exception):
 ANSI_CODE_PATTERN = r"\x1b\[[0-9;]*m"
 RESPONSE_PATTERN = r"⏺(?:\x1b\[[0-9;]*m)*\s+"  # Handle any ANSI codes between marker and text
 PROCESSING_PATTERN = r"[✶✢✽✻·✳].*….*\(esc to interrupt.*\)"
-IDLE_PROMPT_PATTERN = r">[\s\xa0]"  # Handle both regular space and non-breaking space
+IDLE_PROMPT_PATTERN = r"(?:>[\s\xa0]|❯[\s\xa0])"
 WAITING_USER_ANSWER_PATTERN = (
     r"❯.*\d+\."  # Pattern for Claude showing selection options with arrow cursor
 )
-IDLE_PROMPT_PATTERN_LOG = r">[\s\xa0]"  # Same pattern for log files
+IDLE_PROMPT_PATTERN_LOG = r"(?:>[\s\xa0]|❯[\s\xa0])"
 
 
 class ClaudeCodeProvider(BaseProvider):
@@ -143,7 +143,7 @@ class ClaudeCodeProvider(BaseProvider):
 
         for line in lines:
             # Stop at next > prompt or separator line
-            if re.match(r">\s", line) or "────────" in line:
+            if re.match(r"(?:>\s|❯[\s\xa0])", line) or "────────" in line:
                 break
 
             # Clean the line
