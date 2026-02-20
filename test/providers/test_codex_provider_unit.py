@@ -17,12 +17,12 @@ def load_fixture(filename: str) -> str:
 
 
 class TestCodexProviderInitialization:
-    @patch("cli_agent_orchestrator.providers.codex.wait_until_status")
+    @patch.object(CodexProvider, "get_status")
     @patch("cli_agent_orchestrator.providers.codex.wait_for_shell")
     @patch("cli_agent_orchestrator.providers.codex.tmux_client")
-    def test_initialize_success(self, mock_tmux, mock_wait_shell, mock_wait_status):
+    def test_initialize_success(self, mock_tmux, mock_wait_shell, mock_get_status):
         mock_wait_shell.return_value = True
-        mock_wait_status.return_value = True
+        mock_get_status.return_value = TerminalStatus.IDLE
 
         provider = CodexProvider("test1234", "test-session", "window-0", None)
         result = provider.initialize()
@@ -30,7 +30,24 @@ class TestCodexProviderInitialization:
         assert result is True
         mock_wait_shell.assert_called_once()
         mock_tmux.send_keys.assert_called_once_with("test-session", "window-0", "codex")
-        mock_wait_status.assert_called_once()
+        mock_get_status.assert_called_once()
+
+    @patch.object(CodexProvider, "get_status")
+    @patch("cli_agent_orchestrator.providers.codex.wait_for_shell")
+    @patch("cli_agent_orchestrator.providers.codex.tmux_client")
+    def test_initialize_success_when_waiting_user_answer(
+        self, mock_tmux, mock_wait_shell, mock_get_status
+    ):
+        mock_wait_shell.return_value = True
+        mock_get_status.return_value = TerminalStatus.WAITING_USER_ANSWER
+
+        provider = CodexProvider("test1234", "test-session", "window-0", None)
+        result = provider.initialize()
+
+        assert result is True
+        mock_wait_shell.assert_called_once()
+        mock_tmux.send_keys.assert_called_once_with("test-session", "window-0", "codex")
+        mock_get_status.assert_called_once()
 
     @patch("cli_agent_orchestrator.providers.codex.wait_for_shell")
     @patch("cli_agent_orchestrator.providers.codex.tmux_client")
@@ -42,12 +59,11 @@ class TestCodexProviderInitialization:
         with pytest.raises(TimeoutError, match="Shell initialization timed out"):
             provider.initialize()
 
-    @patch("cli_agent_orchestrator.providers.codex.wait_until_status")
+    @patch("cli_agent_orchestrator.providers.codex.time.time", side_effect=[0.0, 61.0])
     @patch("cli_agent_orchestrator.providers.codex.wait_for_shell")
     @patch("cli_agent_orchestrator.providers.codex.tmux_client")
-    def test_initialize_codex_timeout(self, mock_tmux, mock_wait_shell, mock_wait_status):
+    def test_initialize_codex_timeout(self, mock_tmux, mock_wait_shell, _mock_time):
         mock_wait_shell.return_value = True
-        mock_wait_status.return_value = False
 
         provider = CodexProvider("test1234", "test-session", "window-0", None)
 
@@ -86,6 +102,20 @@ class TestCodexProviderStatusDetection:
     @patch("cli_agent_orchestrator.providers.codex.tmux_client")
     def test_get_status_waiting_user_answer(self, mock_tmux):
         mock_tmux.get_history.return_value = load_fixture("codex_permission_output.txt")
+
+        provider = CodexProvider("test1234", "test-session", "window-0")
+        status = provider.get_status()
+
+        assert status == TerminalStatus.WAITING_USER_ANSWER
+
+    @patch("cli_agent_orchestrator.providers.codex.tmux_client")
+    def test_get_status_waiting_user_answer_for_trust_prompt(self, mock_tmux):
+        mock_tmux.get_history.return_value = (
+            "Do you trust the contents of this directory?\n"
+            "› 1. Yes, continue\n"
+            "  2. No, quit\n"
+            "Press enter to continue\n"
+        )
 
         provider = CodexProvider("test1234", "test-session", "window-0")
         status = provider.get_status()

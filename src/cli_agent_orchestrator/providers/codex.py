@@ -2,12 +2,13 @@
 
 import logging
 import re
+import time
 from typing import Optional
 
 from cli_agent_orchestrator.clients.tmux import tmux_client
 from cli_agent_orchestrator.models.terminal import TerminalStatus
 from cli_agent_orchestrator.providers.base import BaseProvider
-from cli_agent_orchestrator.utils.terminal import wait_for_shell, wait_until_status
+from cli_agent_orchestrator.utils.terminal import wait_for_shell
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +24,7 @@ USER_PREFIX_PATTERN = r"^You\b"
 
 PROCESSING_PATTERN = r"\b(thinking|working|running|executing|processing|analyzing)\b"
 WAITING_PROMPT_PATTERN = r"^(?:Approve|Allow)\b.*\b(?:y/n|yes/no|yes|no)\b"
+TRUST_PROMPT_PATTERN = r"(?:do you trust the contents of this directory|press enter to continue)"
 ERROR_PATTERN = r"^(?:Error:|ERROR:|Traceback \(most recent call last\):|panic:)"
 
 
@@ -47,11 +49,17 @@ class CodexProvider(BaseProvider):
 
         tmux_client.send_keys(self.session_name, self.window_name, "codex")
 
-        if not wait_until_status(self, TerminalStatus.IDLE, timeout=60.0, polling_interval=1.0):
-            raise TimeoutError("Codex initialization timed out after 60 seconds")
+        # Codex may require one-time directory trust confirmation before reaching IDLE.
+        # Treat WAITING_USER_ANSWER as initialized so users can interact in tmux.
+        start = time.time()
+        while time.time() - start < 60.0:
+            status = self.get_status()
+            if status in (TerminalStatus.IDLE, TerminalStatus.WAITING_USER_ANSWER):
+                self._initialized = True
+                return True
+            time.sleep(1.0)
 
-        self._initialized = True
-        return True
+        raise TimeoutError("Codex initialization timed out after 60 seconds")
 
     def get_status(self, tail_lines: Optional[int] = None) -> TerminalStatus:
         """Get Codex status by analyzing terminal output."""
@@ -99,6 +107,8 @@ class CodexProvider(BaseProvider):
                     return TerminalStatus.ERROR
         else:
             if re.search(WAITING_PROMPT_PATTERN, tail_output, re.IGNORECASE | re.MULTILINE):
+                return TerminalStatus.WAITING_USER_ANSWER
+            if re.search(TRUST_PROMPT_PATTERN, tail_output, re.IGNORECASE | re.MULTILINE):
                 return TerminalStatus.WAITING_USER_ANSWER
             if re.search(ERROR_PATTERN, tail_output, re.IGNORECASE | re.MULTILINE):
                 return TerminalStatus.ERROR
