@@ -2,14 +2,14 @@
 
 import re
 import shlex
+import time
 from typing import Optional
 
 from cli_agent_orchestrator.clients.tmux import tmux_client
 from cli_agent_orchestrator.models.terminal import TerminalStatus
 from cli_agent_orchestrator.providers.base import BaseProvider
 from cli_agent_orchestrator.utils.agent_profiles import load_agent_profile
-from cli_agent_orchestrator.utils.terminal import wait_until_status
-
+from cli_agent_orchestrator.utils.terminal import wait_for_shell
 
 # Custom exception for provider errors
 class ProviderError(Exception):
@@ -22,11 +22,12 @@ class ProviderError(Exception):
 ANSI_CODE_PATTERN = r"\x1b\[[0-9;]*m"
 RESPONSE_PATTERN = r"⏺(?:\x1b\[[0-9;]*m)*\s+"  # Handle any ANSI codes between marker and text
 PROCESSING_PATTERN = r"[✶✢✽✻·✳].*….*\(esc to interrupt.*\)"
-IDLE_PROMPT_PATTERN = r"(?:>[\s\xa0]|❯[\s\xa0])"
-WAITING_USER_ANSWER_PATTERN = (
-    r"❯.*\d+\."  # Pattern for Claude showing selection options with arrow cursor
-)
-IDLE_PROMPT_PATTERN_LOG = r"(?:>[\s\xa0]|❯[\s\xa0])"
+STARTUP_PATTERN = r"Claude Code v\d"
+IDLE_PROMPT_LINE_PATTERN = r"^\s*(?:>|❯)\s*$"
+WAITING_USER_ANSWER_PATTERN = r"^\s*❯.*\d+\."
+TRUST_PROMPT_PATTERN = r"(?:do you trust the contents of this directory|press enter to continue)"
+ERROR_PATTERN = r"(?:command not found:\s*claude|permission denied|no such file or directory)"
+IDLE_PROMPT_PATTERN_LOG = r"❯"
 
 
 class ClaudeCodeProvider(BaseProvider):
@@ -77,18 +78,24 @@ class ClaudeCodeProvider(BaseProvider):
 
     def initialize(self) -> bool:
         """Initialize Claude Code provider by starting claude command."""
+        if not wait_for_shell(tmux_client, self.session_name, self.window_name, timeout=10.0):
+            raise TimeoutError("Shell initialization timed out after 10 seconds")
+
         # Build properly escaped command string
         command = self._build_claude_command()
 
         # Send Claude Code command using tmux client
         tmux_client.send_keys(self.session_name, self.window_name, command)
 
-        # Wait for Claude Code prompt to be ready
-        if not wait_until_status(self, TerminalStatus.IDLE, timeout=30.0, polling_interval=1.0):
-            raise TimeoutError("Claude Code initialization timed out after 30 seconds")
+        start = time.time()
+        while time.time() - start < 60.0:
+            status = self.get_status()
+            if status in (TerminalStatus.IDLE, TerminalStatus.WAITING_USER_ANSWER):
+                self._initialized = True
+                return True
+            time.sleep(1.0)
 
-        self._initialized = True
-        return True
+        raise TimeoutError("Claude Code initialization timed out after 60 seconds")
 
     def get_status(self, tail_lines: Optional[int] = None) -> TerminalStatus:
         """Get Claude Code status by analyzing terminal output."""
@@ -99,24 +106,37 @@ class ClaudeCodeProvider(BaseProvider):
         if not output:
             return TerminalStatus.ERROR
 
+        clean_output = re.sub(ANSI_CODE_PATTERN, "", output)
+        tail_output = "\n".join(clean_output.splitlines()[-80:])
+
+        if re.search(ERROR_PATTERN, tail_output, re.IGNORECASE):
+            return TerminalStatus.ERROR
+
         # Check for processing state first
-        if re.search(PROCESSING_PATTERN, output):
+        if re.search(PROCESSING_PATTERN, tail_output):
             return TerminalStatus.PROCESSING
 
         # Check for waiting user answer (Claude asking for user selection)
-        if re.search(WAITING_USER_ANSWER_PATTERN, output):
+        if re.search(WAITING_USER_ANSWER_PATTERN, tail_output, re.MULTILINE):
+            return TerminalStatus.WAITING_USER_ANSWER
+        if re.search(TRUST_PROMPT_PATTERN, tail_output, re.IGNORECASE):
             return TerminalStatus.WAITING_USER_ANSWER
 
         # Check for completed state (has response + ready prompt)
-        if re.search(RESPONSE_PATTERN, output) and re.search(IDLE_PROMPT_PATTERN, output):
+        if re.search(RESPONSE_PATTERN, output) and re.search(
+            IDLE_PROMPT_LINE_PATTERN, tail_output, re.MULTILINE
+        ):
             return TerminalStatus.COMPLETED
 
         # Check for idle state (just ready prompt, no response)
-        if re.search(IDLE_PROMPT_PATTERN, output):
+        if re.search(IDLE_PROMPT_LINE_PATTERN, tail_output, re.MULTILINE):
             return TerminalStatus.IDLE
 
-        # If no recognizable state, return ERROR
-        return TerminalStatus.ERROR
+        if re.search(STARTUP_PATTERN, tail_output):
+            return TerminalStatus.PROCESSING
+
+        # Unknown non-error output is usually startup/render transition.
+        return TerminalStatus.PROCESSING
 
     def get_idle_pattern_for_log(self) -> str:
         """Return Claude Code IDLE prompt pattern for log files."""
