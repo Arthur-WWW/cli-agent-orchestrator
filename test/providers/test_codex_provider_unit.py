@@ -308,6 +308,35 @@ class TestCodexProviderMessageExtraction:
         with pytest.raises(ValueError, match="Empty Codex response"):
             provider.extract_last_message_from_script(output)
 
+    def test_extract_last_message_fallback_without_assistant_marker(self):
+        output = (
+            "› You are the developer agent for phase-driven implementation.\n"
+            "\n"
+            "• Implementing Phase 1 only.\n"
+            "• Ran pwd && ls -la\n"
+            "• Explored docs/implement-plan.md\n"
+            "\n"
+            "› Improve documentation in @filename\n"
+            "  ? for shortcuts                                             92% context left\n"
+        )
+
+        provider = CodexProvider("test1234", "test-session", "window-0")
+        message = provider.extract_last_message_from_script(output)
+
+        assert message == (
+            "• Implementing Phase 1 only.\n"
+            "• Ran pwd && ls -la\n"
+            "• Explored docs/implement-plan.md"
+        )
+
+    def test_extract_last_message_fallback_raises_when_only_prompt(self):
+        output = "› Improve documentation in @filename\n  ? for shortcuts\n"
+
+        provider = CodexProvider("test1234", "test-session", "window-0")
+
+        with pytest.raises(ValueError, match="No Codex response found"):
+            provider.extract_last_message_from_script(output)
+
 
 class TestCodexProviderMisc:
     def test_get_idle_pattern_for_log(self):

@@ -28,6 +28,10 @@ PROCESSING_PATTERN = r"\b(thinking|working|running|executing|processing|analyzin
 WAITING_PROMPT_PATTERN = r"^(?:Approve|Allow)\b.*\b(?:y/n|yes/no|yes|no)\b"
 TRUST_PROMPT_PATTERN = r"(?:do you trust the contents of this directory|press enter to continue)"
 ERROR_PATTERN = r"^(?:Error:|ERROR:|Traceback \(most recent call last\):|panic:)"
+PROMPT_LINE_PATTERN = r"^\s*(?:❯|›|codex>)(?:\s.*)?$"
+FOOTER_LINE_PATTERN = r"(?:for shortcuts|context left)\s*$"
+SEPARATOR_LINE_PATTERN = r"^\s*[─-]{8,}\s*$"
+FALLBACK_MESSAGE_MAX_LINES = 120
 
 
 class CodexProvider(BaseProvider):
@@ -154,7 +158,7 @@ class CodexProvider(BaseProvider):
         )
 
         if not matches:
-            raise ValueError("No Codex response found - no assistant marker detected")
+            return self._extract_last_message_fallback(clean_output)
 
         last_match = matches[-1]
         start_pos = last_match.end()
@@ -170,6 +174,49 @@ class CodexProvider(BaseProvider):
 
         if not final_answer:
             raise ValueError("Empty Codex response - no content found")
+
+        return final_answer
+
+    def _extract_last_message_fallback(self, clean_output: str) -> str:
+        """Best-effort extraction for Codex UIs that omit explicit assistant labels."""
+        if not re.search(PROMPT_LINE_PATTERN, clean_output, re.IGNORECASE | re.MULTILINE):
+            raise ValueError("No Codex response found - no assistant marker detected")
+
+        lines = clean_output.splitlines()
+        if not lines:
+            raise ValueError("No Codex response found - empty output")
+
+        # Remove trailing prompt/footer/noise lines.
+        while lines:
+            last = lines[-1]
+            if not last.strip():
+                lines.pop()
+                continue
+            if re.search(FOOTER_LINE_PATTERN, last, re.IGNORECASE):
+                lines.pop()
+                continue
+            if re.match(PROMPT_LINE_PATTERN, last, re.IGNORECASE):
+                lines.pop()
+                continue
+            if re.match(SEPARATOR_LINE_PATTERN, last, re.IGNORECASE):
+                lines.pop()
+                continue
+            break
+
+        if not lines:
+            raise ValueError("No Codex response found - no content before prompt")
+
+        start = max(0, len(lines) - FALLBACK_MESSAGE_MAX_LINES)
+
+        # If bullet-style output exists in the tail, anchor there to avoid returning old history.
+        for i in range(start, len(lines)):
+            if re.match(r"^\s*•\s+\S", lines[i]):
+                start = i
+                break
+
+        final_answer = "\n".join(lines[start:]).strip()
+        if not final_answer:
+            raise ValueError("Empty Codex response - fallback extraction produced no content")
 
         return final_answer
 
